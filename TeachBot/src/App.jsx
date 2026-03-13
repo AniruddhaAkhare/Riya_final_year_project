@@ -43,6 +43,9 @@ import IkigaiPage from "./pages/IkigaiPage";
 // overview page
 import Overview from "./pages/Overview";
 
+import TeacherStudentOverview from "./pages/TeacherStudentOverview";
+import TeacherInsights from "./pages/TeacherInsights";
+
 function App() {
   return (
     <UserProvider>
@@ -57,6 +60,15 @@ function App() {
           {/* ===== DASHBOARDS ===== */}
           <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
           <Route path="/parent-dashboard" element={<ParentDashboard />} />
+
+
+          {/* ===== TEACHER VIEW STUDENT OVERVIEW ===== */}
+          <Route
+            path="/teacher/student/:id"
+            element={<TeacherStudentOverview />}
+          />
+
+          <Route path="/teacher/insights" element={<TeacherInsights />} />
 
           {/* ===== STUDENT DASHBOARD LAYOUT ===== */}
           <Route path="/student-dashboard" element={<StudentDashboard />}>

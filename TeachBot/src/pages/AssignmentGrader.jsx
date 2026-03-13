@@ -19,26 +19,23 @@ function AssignmentGrader() {
     setError("");
     setResult(null);
 
-   try {
-  const token = localStorage.getItem("token");
-  if (!token) {
-    alert("User not logged in");
-    return;
-  }
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("User not logged in");
+        return;
+      }
 
-  const res = await axios.post(
-    "http://localhost:5000/evaluate",
-    formData,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  
-
+      const res = await axios.post(
+        "http://localhost:5000/evaluate",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       setResult(res.data);
     } catch (err) {
@@ -49,7 +46,9 @@ function AssignmentGrader() {
   };
 
   const renderQuestions = (assignment) => {
-    if (!assignment || !assignment.questions) {
+    console.log("Assignment object:", assignment);
+
+    if (!assignment) {
       return (
         <p className="text-center text-gray-500">
           No question-wise data available.
@@ -57,8 +56,70 @@ function AssignmentGrader() {
       );
     }
 
-    return assignment.questions.map((q, idx) => {
-      const percentage = Math.round((q.score / q.max_score) * 100);
+    // Support multiple Gemini formats
+    const questions =
+      assignment.questions ||
+      assignment.question_wise_analysis ||
+      assignment.question_analysis ||
+      assignment.qa_pairs ||
+      [];
+
+    if (!questions || questions.length === 0) {
+      return (
+        <p className="text-center text-gray-500">
+          No question-wise data available.
+        </p>
+      );
+    }
+
+    return questions.map((q, idx) => {
+      // Flexible field mapping
+      const question =
+        q.question ||
+        q.question_text ||
+        q.prompt ||
+        `Question ${idx + 1}`;
+
+      const studentAnswer =
+        q.student_answer ||
+        q.studentAnswer ||
+        q.answer ||
+        q.student_response ||
+        "Not answered";
+
+      const expectedAnswer =
+        q.correct_answer ||
+        q.expectedAnswer ||
+        q.model_answer ||
+        q.reference_answer ||
+        "Not provided";
+
+      const score =
+        q.score ||
+        q.marks_awarded ||
+        q.marks ||
+        q.obtained_marks ||
+        0;
+
+      const maxScore =
+        q.max_score ||
+        q.max_marks ||
+        q.total_marks ||
+        q.maximum_marks ||
+        1;
+
+      const percentage = Math.round((score / maxScore) * 100);
+
+      const isCorrect =
+        q.is_correct !== undefined
+          ? q.is_correct
+          : percentage >= 60;
+
+      const feedback =
+        q.feedback ||
+        q.ai_feedback ||
+        q.comment ||
+        "";
 
       return (
         <motion.div
@@ -70,10 +131,10 @@ function AssignmentGrader() {
         >
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-gray-900">
-              Q{idx + 1}. {q.question}
+              Q{idx + 1}. {question}
             </h3>
 
-            {q.is_correct ? (
+            {isCorrect ? (
               <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
                 <CheckCircle className="w-4 h-4" />
                 Correct
@@ -90,13 +151,14 @@ function AssignmentGrader() {
             <div className="flex justify-between text-sm text-gray-600 mb-1">
               <span>Score</span>
               <span>
-                {q.score} / {q.max_score}
+                {score} / {maxScore}
               </span>
             </div>
+
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full ${
-                  q.is_correct ? "bg-green-500" : "bg-orange-500"
+                  isCorrect ? "bg-green-500" : "bg-orange-500"
                 }`}
                 style={{ width: `${percentage}%` }}
               />
@@ -105,9 +167,11 @@ function AssignmentGrader() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="font-medium text-gray-700 mb-1">Your Answer</p>
+              <p className="font-medium text-gray-700 mb-1">
+                Your Answer
+              </p>
               <p className="text-gray-600">
-                {q.student_answer || "Not answered"}
+                {studentAnswer}
               </p>
             </div>
 
@@ -115,14 +179,16 @@ function AssignmentGrader() {
               <p className="font-medium text-green-700 mb-1">
                 Expected Answer
               </p>
-              <p className="text-green-800">{q.correct_answer}</p>
+              <p className="text-green-800">
+                {expectedAnswer}
+              </p>
             </div>
           </div>
 
-          {q.feedback && (
+          {feedback && (
             <div className="mt-4 bg-blue-50 p-3 rounded-lg">
               <p className="text-sm text-blue-800">
-                💡 <strong>AI Feedback:</strong> {q.feedback}
+                💡 <strong>AI Feedback:</strong> {feedback}
               </p>
             </div>
           )}
@@ -193,12 +259,14 @@ function AssignmentGrader() {
                   {result.similarity_analysis?.assignment_to_assignment_similarity_percent}%
                 </p>
               </div>
+
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-500">Plagiarism Risk</p>
                 <p className="text-xl font-bold text-gray-900">
                   {result.similarity_analysis?.plagiarism_risk}
                 </p>
               </div>
+
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-500">Interpretation</p>
                 <p className="text-sm text-gray-900">
@@ -213,13 +281,22 @@ function AssignmentGrader() {
             <h2 className="text-lg font-semibold text-gray-800 mb-4">
               Assignment 1
             </h2>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-500">Overall Score</p>
                 <p className="text-xl font-bold text-gray-900">
-                  {result.assignment_1.overall_score}
+                  {
+  result.assignment_1.overall_score ??
+  result.assignment_1.total_score ??
+  result.assignment_1.score ??
+  result.assignment_1.percentage ??
+  result.assignment_1.final_score ??
+  0
+}
                 </p>
               </div>
+
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-500">Result</p>
                 <p className="text-xl font-bold text-gray-900">
@@ -236,13 +313,22 @@ function AssignmentGrader() {
             <h2 className="text-lg font-semibold text-gray-800 mb-4">
               Assignment 2
             </h2>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-500">Overall Score</p>
                 <p className="text-xl font-bold text-gray-900">
-                  {result.assignment_2.overall_score}
+                  {
+  result.assignment_2.overall_score ??
+  result.assignment_2.total_score ??
+  result.assignment_2.score ??
+  result.assignment_2.percentage ??
+  result.assignment_2.final_score ??
+  0
+}
                 </p>
               </div>
+
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-500">Result</p>
                 <p className="text-xl font-bold text-gray-900">

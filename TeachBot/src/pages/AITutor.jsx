@@ -8,19 +8,26 @@ const AITutor = () => {
   const [input, setInput] = useState("");
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(0);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
 
     const userMsg = { sender: "user", text: input };
-    setChat((prev) => [...prev, userMsg]);
+
+    const updatedChat = [...chat, userMsg];
+    setChat(updatedChat);
     setInput("");
     setLoading(true);
 
     try {
+      const history = updatedChat.map((m) => `${m.sender}: ${m.text}`);
+
       const res = await axios.post("http://localhost:5000/ai-tutor", {
         message: userMsg.text,
-        mode
+        mode,
+        history,
+        step
       });
 
       const aiMsg = {
@@ -29,6 +36,11 @@ const AITutor = () => {
       };
 
       setChat((prev) => [...prev, aiMsg]);
+
+      if (mode === "question") {
+        setStep((prev) => prev + 1);
+      }
+
     } catch {
       setChat((prev) => [
         ...prev,
@@ -42,7 +54,7 @@ const AITutor = () => {
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-6">
 
-      {/* ================= HEADER ================= */}
+      {/* HEADER */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <motion.div
@@ -63,14 +75,17 @@ const AITutor = () => {
           </div>
         </div>
 
-        {/* ================= TOGGLE ================= */}
+        {/* TOGGLE */}
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium">Answer Me</span>
 
           <div
-            onClick={() =>
-              setMode(mode === "answer" ? "question" : "answer")
-            }
+            onClick={() => {
+              const newMode = mode === "answer" ? "question" : "answer";
+              setMode(newMode);
+              setStep(0);
+              setChat([]);
+            }}
             className={`w-14 h-7 flex items-center rounded-full cursor-pointer transition-all ${
               mode === "question" ? "bg-teal-600" : "bg-gray-300"
             }`}
@@ -89,7 +104,7 @@ const AITutor = () => {
         </div>
       </div>
 
-      {/* ================= CHAT ================= */}
+      {/* CHAT */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-2">
         <AnimatePresence>
           {chat.map((msg, idx) => (
@@ -126,7 +141,7 @@ const AITutor = () => {
         )}
       </div>
 
-      {/* ================= INPUT ================= */}
+      {/* INPUT */}
       <div className="mt-4 flex gap-3">
         <input
           value={input}

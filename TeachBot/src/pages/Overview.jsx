@@ -3,22 +3,23 @@ import axios from "axios";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 
-const Overview = () => {
-  const [overview, setOverview] = useState(null);
-  const [loading, setLoading] = useState(true);
+const Overview = ({ overview: teacherOverview }) => {
+  const [overview, setOverview] = useState(teacherOverview || null);
+  const [loading, setLoading] = useState(!teacherOverview);
   const [activeTab, setActiveTab] = useState("resumes");
   const [expandedATS, setExpandedATS] = useState(null);
   const [expandedSkillId, setExpandedSkillId] = useState(null);
   const [openPhase, setOpenPhase] = useState({});
   const [expandedIkigaiId, setExpandedIkigaiId] = useState(null);
   
-
-
-
-
-  useEffect(() => {
+useEffect(() => {
+  if (!teacherOverview) {
     fetchOverview();
-  }, []);
+  } else {
+    setOverview(teacherOverview);
+    setLoading(false);
+  }
+}, [teacherOverview]);
 
   const fetchOverview = async () => {
     try {

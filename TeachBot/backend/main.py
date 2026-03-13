@@ -758,47 +758,97 @@ def ai_tutor():
         data = request.get_json(silent=True)
         if not data:
             return jsonify({"error": "Invalid JSON"}), 400
+
         message = data.get("message")
         mode = data.get("mode")
         history = data.get("history", [])
+        step = data.get("step", 0)
+
         if not message or not mode:
             return jsonify({"error": "Missing message or mode"}), 400
-        model = genai.GenerativeModel(MODEL_NAME)
-        if mode == "ANSWER":
-            system_prompt = f"""
-You are an AI tutor.
 
-Answer the student's question clearly and concisely.
-Explain in simple language.
-Avoid unnecessary verbosity.
+        model = genai.GenerativeModel(MODEL_NAME)
+
+        # ---------------- ANSWER MODE ----------------
+        if mode.lower() == "answer":
+
+            system_prompt = f"""
+You are a helpful AI tutor.
+
+TASK:
+Answer the student's question clearly and correctly.
+
+RULES:
+- Use simple explanations
+- Use examples when useful
+- Do not hallucinate information
+- Be concise but educational
 
 Student question:
 {message}
 """
+
+        # ---------------- SOCRATIC MODE ----------------
         else:
-            system_prompt = f"""
+
+            # After 4 questions -> reveal answer
+            if step >= 4:
+
+                system_prompt = f"""
+You are an AI tutor finishing a Socratic discussion.
+
+The student has already answered several guiding questions.
+
+Now do the following:
+1. Provide the correct answer to the original problem
+2. Explain the reasoning clearly
+3. Summarize the concept briefly
+
+Original topic:
+{history}
+
+Student latest message:
+{message}
+"""
+
+            else:
+
+                system_prompt = f"""
 You are an AI tutor using the Socratic method.
 
-RULES:
-- DO NOT give direct answers
-- Ask only ONE guiding question at a time
-- Help the student reason step by step
-- Encourage thinking
-- When the student reaches the answer, summarize briefly
+GOAL:
+Help the student reach the answer themselves.
+
+STRICT RULES:
+- Ask ONLY ONE guiding question
+- Stay on the SAME topic
+- Do NOT introduce new topics
+- Do NOT give the answer yet
+- Questions must logically follow the previous one
+- Questions must help reasoning
 
 Conversation so far:
 {history}
 
-Student's question or response:
+Student response:
 {message}
+
+Ask ONE guiding question to move the student closer to the solution.
 """
+
         response = model.generate_content(system_prompt)
         reply = response.text.strip()
-        return jsonify({"reply": reply}), 200
+
+        return jsonify({
+            "reply": reply
+        }), 200
+
     except ResourceExhausted:
         return jsonify({"error": "Gemini quota exceeded"}), 429
+
     except PermissionDenied:
         return jsonify({"error": "Gemini API not enabled"}), 403
+
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -1311,6 +1361,391 @@ def get_students_for_teacher():
     except Exception as e:
         print("Error fetching students:", e)
         return jsonify({"error": "Failed to fetch students"}), 500
+    
+@app.route("/teacher/profile", methods=["GET"])
+@jwt_required()
+def teacher_profile():
+    try:
+        teacher_id = get_jwt_identity()
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT name,email
+            FROM users
+            WHERE id = ? AND role = 'teacher'
+        """, (teacher_id,))
+
+        teacher = cursor.fetchone()
+        conn.close()
+
+        if not teacher:
+            return jsonify({"error": "Teacher not found"}), 404
+
+        return jsonify({
+            "name": teacher["name"],
+            "email": teacher["email"]
+        }), 200
+
+    except Exception as e:
+        print("Teacher profile error:", e)
+        return jsonify({"error": "Failed to fetch teacher"}), 500
+    
+@app.route("/teacher/student/<int:student_id>/stats", methods=["GET"])
+@jwt_required()
+def student_stats(student_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT COUNT(*) as total_assignments
+            FROM assignment_evaluations
+            WHERE user_id = ?
+        """, (student_id,))
+
+        assignments = cursor.fetchone()["total_assignments"]
+
+        cursor.execute("""
+            SELECT COUNT(*) as total_quizzes
+            FROM quiz_attempts
+            WHERE user_id = ?
+        """, (student_id,))
+
+        quizzes = cursor.fetchone()["total_quizzes"]
+
+        conn.close()
+
+        return jsonify({
+            "student_id": student_id,
+            "total_assignments": assignments,
+            "total_quizzes": quizzes
+        }), 200
+
+    except Exception as e:
+        print("Student stats error:", e)
+        return jsonify({"error": "Failed to fetch stats"}), 500
+    
+@app.route("/teacher/student/<int:student_id>/overview", methods=["GET"])
+@jwt_required()
+def teacher_view_student_overview(student_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # RESUMES
+        cursor.execute("""
+            SELECT id, resume_title, target_role, resume_json, created_at
+            FROM resumes
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (student_id,))
+        resumes = [dict(r) for r in cursor.fetchall()]
+
+        # ATS
+        cursor.execute("""
+            SELECT id, resume_id, preferred_role, ats_score, strengths, weaknesses, created_at
+            FROM ats_analysis
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (student_id,))
+        ats = [dict(a) for a in cursor.fetchall()]
+
+        # SKILL GAP
+        cursor.execute("""
+            SELECT id, resume_id, preferred_role, skills_input, missing_skills, recommended_skills, learning_suggestions, created_at
+            FROM skill_gap_analysis
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (student_id,))
+        skill_gaps = [dict(s) for s in cursor.fetchall()]
+
+        # IKIGAI
+        cursor.execute("""
+            SELECT *
+            FROM ikigai_analysis
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (student_id,))
+        ikigai = [dict(k) for k in cursor.fetchall()]
+
+        # CAREER
+        cursor.execute("""
+            SELECT *
+            FROM career_analysis
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (student_id,))
+        career = [dict(c) for c in cursor.fetchall()]
+
+        # ASSIGNMENTS
+        cursor.execute("""
+            SELECT *
+            FROM assignment_evaluations
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (student_id,))
+        assignments = [dict(a) for a in cursor.fetchall()]
+
+        # QUIZ
+        cursor.execute("""
+            SELECT *
+            FROM quiz_attempts
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (student_id,))
+        quizzes = [dict(q) for q in cursor.fetchall()]
+
+        conn.close()
+
+        return jsonify({
+            "overview": {
+                "resumes": resumes,
+                "ats_analysis": ats,
+                "skill_gap_analysis": skill_gaps,
+                "ikigai_analysis": ikigai,
+                "career_analysis": career,
+                "assignment_evaluations": assignments,
+                "quiz_attempts": quizzes
+            }
+        }), 200
+
+    except Exception as e:
+        print("Overview error:", e)
+        return jsonify({"error": "Failed to fetch overview"}), 500
+    
+@app.route("/teacher/student-overview/<int:student_id>", methods=["GET"])
+@jwt_required()
+def teacher_student_overview(student_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # RESUMES
+        cursor.execute(
+            "SELECT * FROM resumes WHERE user_id = ? ORDER BY created_at DESC",
+            (student_id,)
+        )
+        resumes = cursor.fetchall()
+
+        # ATS
+        cursor.execute(
+            "SELECT * FROM ats_analysis WHERE user_id = ? ORDER BY created_at DESC",
+            (student_id,)
+        )
+        ats = cursor.fetchall()
+
+        # SKILL GAP
+        cursor.execute(
+            "SELECT * FROM skill_gap_analysis WHERE user_id = ? ORDER BY created_at DESC",
+            (student_id,)
+        )
+        skill = cursor.fetchall()
+
+        # IKIGAI
+        cursor.execute(
+            "SELECT * FROM ikigai_analysis WHERE user_id = ? ORDER BY created_at DESC",
+            (student_id,)
+        )
+        ikigai = cursor.fetchall()
+
+        # CAREER
+        cursor.execute(
+            "SELECT * FROM career_analysis WHERE user_id = ? ORDER BY created_at DESC",
+            (student_id,)
+        )
+        career = cursor.fetchall()
+
+        # ASSIGNMENTS
+        cursor.execute(
+            "SELECT * FROM assignment_evaluations WHERE user_id = ? ORDER BY created_at DESC",
+            (student_id,)
+        )
+        assignments = cursor.fetchall()
+
+        # QUIZ
+        cursor.execute(
+            "SELECT * FROM quiz_attempts WHERE user_id = ? ORDER BY created_at DESC",
+            (student_id,)
+        )
+        quiz = cursor.fetchall()
+
+        conn.close()
+
+        def rows_to_dict(rows):
+            return [dict(r) for r in rows]
+
+        return jsonify({
+            "overview": {
+                "resumes": rows_to_dict(resumes),
+                "ats_analysis": rows_to_dict(ats),
+                "skill_gap_analysis": rows_to_dict(skill),
+                "ikigai_analysis": rows_to_dict(ikigai),
+                "career_analysis": rows_to_dict(career),
+                "assignment_evaluations": rows_to_dict(assignments),
+                "quiz_attempts": rows_to_dict(quiz)
+            }
+        }), 200
+
+    except Exception as e:
+        print("Error fetching student overview:", e)
+        return jsonify({"error": "Failed to fetch overview"}), 500
+    
+@app.route("/teacher/analytics", methods=["GET"])
+def teacher_analytics():
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        # =========================
+        # BASIC STATS
+        # =========================
+
+        cursor.execute("SELECT COUNT(*) FROM users WHERE role='student'")
+        total_students = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM resumes")
+        resumes_created = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM assignment_evaluations")
+        total_assignments = cursor.fetchone()[0]
+
+        cursor.execute("SELECT AVG(ats_score) FROM ats_analysis")
+        avg_ats = cursor.fetchone()[0] or 0
+
+        cursor.execute("SELECT AVG(percentage) FROM quiz_attempts")
+        avg_quiz = cursor.fetchone()[0] or 0
+
+        # =========================
+        # STUDENT PERFORMANCE
+        # =========================
+
+        cursor.execute("SELECT id,name FROM users WHERE role='student'")
+        students = cursor.fetchall()
+
+        student_scores = []
+
+        for student in students:
+
+            sid = student["id"]
+            name = student["name"]
+
+            cursor.execute("SELECT AVG(ats_score) FROM ats_analysis WHERE user_id=?", (sid,))
+            ats = cursor.fetchone()[0] or 0
+
+            cursor.execute("SELECT AVG(percentage) FROM quiz_attempts WHERE user_id=?", (sid,))
+            quiz = cursor.fetchone()[0] or 0
+
+            cursor.execute(
+                "SELECT AVG(100 - similarity_percent) FROM assignment_evaluations WHERE user_id=?",
+                (sid,)
+            )
+            assignment = cursor.fetchone()[0] or 0
+
+            overall = (ats + quiz + assignment) / 3
+
+            student_scores.append({
+                "id": sid,
+                "name": name,
+                "ats": round(ats,2),
+                "quiz": round(quiz,2),
+                "assignment": round(assignment,2),
+                "overall": round(overall,2)
+            })
+
+        # =========================
+        # TOP STUDENTS
+        # =========================
+
+        top_students = sorted(
+            student_scores,
+            key=lambda x: x["overall"],
+            reverse=True
+        )[:3]
+
+        # =========================
+        # WEAK STUDENTS
+        # =========================
+
+        weak_students = [s for s in student_scores if s["overall"] < 50]
+
+        # =========================
+        # CAREER DISTRIBUTION
+        # =========================
+
+        cursor.execute("""
+        SELECT career_goal, COUNT(*)
+        FROM career_analysis
+        GROUP BY career_goal
+        """)
+
+        career_rows = cursor.fetchall()
+
+        career_distribution = {}
+
+        for row in career_rows:
+            career_distribution[row["career_goal"]] = row[1]
+
+        # =========================
+        # SKILL GAP HEATMAP
+        # =========================
+
+        cursor.execute("""
+        SELECT users.name, skill_gap_analysis.skills_input, skill_gap_analysis.missing_skills
+        FROM skill_gap_analysis
+        JOIN users ON users.id = skill_gap_analysis.user_id
+        """)
+
+        heatmap_rows = cursor.fetchall()
+
+        heatmap = []
+
+        for row in heatmap_rows:
+
+            student = row["name"]
+
+            skills = (row["skills_input"] or "").lower().split(",")
+            missing = (row["missing_skills"] or "").lower().split(",")
+
+            def level(skill):
+                if skill in missing:
+                    return "weak"
+                elif skill in skills:
+                    return "strong"
+                else:
+                    return "moderate"
+
+            heatmap.append({
+                "student": student,
+                "python": level("python"),
+                "ml": level("machine learning"),
+                "sql": level("sql"),
+                "communication": level("communication")
+            })
+
+        conn.close()
+
+        return jsonify({
+            "total_students": total_students,
+            "resumes_created": resumes_created,
+            "avg_ats_score": round(avg_ats,2),
+            "avg_quiz_score": round(avg_quiz,2),
+            "total_assignments": total_assignments,
+            "top_students": top_students,
+            "weak_students": weak_students,
+            "student_scores": student_scores,
+            "career_distribution": career_distribution,
+            "skill_heatmap": heatmap
+        })
+
+    except Exception as e:
+
+        conn.close()
+
+        return jsonify({"error": str(e)}), 500
     
 
 init_db()
