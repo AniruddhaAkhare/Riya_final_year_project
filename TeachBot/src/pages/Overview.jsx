@@ -25,7 +25,7 @@ useEffect(() => {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await axios.get("http://localhost:5000/overview", {
+      const res = await axios.get("https://teachbot-backend.onrender.com/overview", {
         headers: { Authorization: `Bearer ${token}` },
       });
 

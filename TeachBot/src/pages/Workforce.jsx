@@ -83,7 +83,7 @@ export default function Workforce() {
       }
 
       const res = await axios.post(
-        "http://localhost:5000/analyze",
+        "https://teachbot-backend.onrender.com/analyze",
         {
           skills: formData.skills,
           goal: formData.goal,

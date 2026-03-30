@@ -27,7 +27,7 @@ function AssignmentGrader() {
       }
 
       const res = await axios.post(
-        "http://localhost:5000/evaluate",
+        "https://teachbot-backend.onrender.com/evaluate",
         formData,
         {
           headers: {

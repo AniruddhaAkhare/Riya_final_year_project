@@ -9,7 +9,7 @@ function TeacherStudentOverview() {
     const token = localStorage.getItem("token");
 
     const res = await fetch(
-      `http://localhost:5000/teacher/student/${id}/overview`,
+      `https://teachbot-backend.onrender.com/teacher/student/${id}/overview`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

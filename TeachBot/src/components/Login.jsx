@@ -19,7 +19,7 @@ const Login = () => {
   setLoading(true);
 
   try {
-    const res = await axios.post("http://localhost:5000/auth/login", {
+    const res = await axios.post("https://teachbot-backend.onrender.com/auth/login", {
       email,
       password,
     });
@@ -29,7 +29,7 @@ const Login = () => {
     localStorage.setItem("token", token);
 
     // fetch user info
-    const userRes = await axios.get("http://localhost:5000/auth/me", {
+    const userRes = await axios.get("https://teachbot-backend.onrender.com/auth/me", {
       headers: {
         Authorization: `Bearer ${token}`,
       },

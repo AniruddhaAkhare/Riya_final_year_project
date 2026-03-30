@@ -23,7 +23,7 @@ const AITutor = () => {
     try {
       const history = updatedChat.map((m) => `${m.sender}: ${m.text}`);
 
-      const res = await axios.post("http://localhost:5000/ai-tutor", {
+      const res = await axios.post("https://teachbot-backend.onrender.com/ai-tutor", {
         message: userMsg.text,
         mode,
         history,

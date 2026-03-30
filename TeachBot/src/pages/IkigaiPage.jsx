@@ -153,7 +153,7 @@ export default function IkigaiPage() {
         return
       }
 
-      const res = await fetch("http://localhost:5000/api/ikigai/analyze", {
+      const res = await fetch("https://teachbot-backend.onrender.com/api/ikigai/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

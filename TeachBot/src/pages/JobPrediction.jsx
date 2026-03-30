@@ -27,7 +27,7 @@ const JobPrediction = () => {
     try {
       setLoading(true);
       const res = await axios.post(
-  "http://localhost:5000/predict-jobs",
+  "https://teachbot-backend.onrender.com/predict-jobs",
   form,
   {
     headers: {

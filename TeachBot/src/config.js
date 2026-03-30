@@ -1,0 +1,1 @@
+BASE_URL="https://teachbot-backend.onrender.com"

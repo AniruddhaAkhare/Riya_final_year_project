@@ -74,7 +74,7 @@ const Register = () => {
   };
 
   try {
-    await axios.post("http://localhost:5000/auth/register", formData);
+    await axios.post("https://teachbot-backend.onrender.com/auth/register", formData);
     alert("Account created successfully!");
     navigate("/login");
   } catch (err) {

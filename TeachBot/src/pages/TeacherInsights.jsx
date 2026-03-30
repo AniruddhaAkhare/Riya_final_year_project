@@ -16,7 +16,7 @@ const TeacherInsights = () => {
  useEffect(()=>{
 
   axios
-   .get("http://localhost:5000/teacher/analytics")
+   .get("https://teachbot-backend.onrender.com/teacher/analytics")
    .then(res=>setData(res.data))
    .catch(err=>console.log(err));
 

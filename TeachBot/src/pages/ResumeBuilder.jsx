@@ -39,7 +39,7 @@ const ResumeBuilder = () => {
       console.log("Sending resume data:", form);
 
       const res = await axios.post(
-        "http://localhost:5000/build-resume",
+        "https://teachbot-backend.onrender.com/build-resume",
         form,
         {
           headers: {
@@ -76,7 +76,7 @@ const ResumeBuilder = () => {
     }
 
     const res = await axios.post(
-      "http://localhost:5000/analyze-ats",
+      "https://teachbot-backend.onrender.com/analyze-ats",
       {
         resume,
         preferredRole: form.preferredRole,
@@ -118,7 +118,7 @@ const ResumeBuilder = () => {
       }
 
       const res = await axios.post(
-        "http://localhost:5000/skill-gap",
+        "https://teachbot-backend.onrender.com/skill-gap",
         {
           skills: form.skills,
           preferredRole: form.preferredRole,

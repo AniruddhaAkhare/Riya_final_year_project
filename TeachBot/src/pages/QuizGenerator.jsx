@@ -29,7 +29,7 @@ const QuizGenerator = () => {
   }
 
   const res = await axios.post(
-    "http://localhost:5000/generate-quiz",
+    "https://teachbot-backend.onrender.com/generate-quiz",
     form,
     {
       headers: {
@@ -84,7 +84,7 @@ const QuizGenerator = () => {
     }
 
     const res = await axios.post(
-      "http://localhost:5000/assess-quiz",
+      "https://teachbot-backend.onrender.com/assess-quiz",
       {
         subject: form.subject,
         quiz: quiz,
