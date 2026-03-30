@@ -1,8 +1,8 @@
 flask
 flask-cors
-paddleocr
-paddlepaddle
 fitz
-pymupdf
 google-generativeai
 python-dotenv
+flask-jwt-extended
+PyMuPDF
+gunicorn

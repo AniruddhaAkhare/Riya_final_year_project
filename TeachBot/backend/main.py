@@ -8,9 +8,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, PermissionDenied
-from paddleocr import PaddleOCR
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+#from sklearn.feature_extraction.text import TfidfVectorizer
+#from sklearn.metrics.pairwise import cosine_similarity
 from flask_jwt_extended import JWTManager
 from auth import auth_bp
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -19,6 +18,12 @@ from database import get_db_connection, init_db
 import json
 from flask_jwt_extended import get_jwt_identity
 from datetime import datetime
+import time
+try:
+    from paddleocr import PaddleOCR
+except Exception as e:
+    print("⚠️ PaddleOCR import failed:", e)
+    PaddleOCR = None
 
 # ================== APP CONFIG ==================
 app = Flask(__name__)
@@ -30,7 +35,7 @@ CORS(
     allow_headers=["Content-Type", "Authorization"]
 )
 
-app.config["JWT_SECRET_KEY"] = "super-secret-key-change-this"
+app.config["JWT_SECRET_KEY"]=os.getenv("JWT_SECRET_KEY")
 jwt = JWTManager(app)
 
 
@@ -57,9 +62,17 @@ app.register_blueprint(auth_bp)
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 MODEL_NAME = "gemini-2.5-flash"
 
+# ================== OCR CONFIG ==================
+USE_OCR = os.getenv("USE_OCR", "false").lower() == "true"
 
 # ================== ASSIGNMENT GRADER SETUP ==================
-ocr_model = PaddleOCR(use_textline_orientation=True, lang='en')
+ocr_model = None
+if USE_OCR and PaddleOCR:
+    try:
+        ocr_model = PaddleOCR(use_textline_orientation=True, lang='en')
+    except Exception as e:
+        print("⚠️ OCR model failed to load:", e)
+        ocr_model = None
 
 def convert_pdf_to_images(pdf_path):
     image_paths = []
@@ -84,6 +97,7 @@ def cleanup_images(image_paths):
             print(f"Warning: could not delete {img}: {e}")
 
 def extract_text_from_pdf(pdf_path):
+    print("📄 Processing PDF:", pdf_path)
     extracted_text = ""
     try:
         with fitz.open(pdf_path) as doc:
@@ -94,10 +108,16 @@ def extract_text_from_pdf(pdf_path):
     except Exception as e:
         print(f"Error opening PDF: {e}")
         return ""
+    print("📝 PyMuPDF extracted length:", len(extracted_text))
 
     if not extracted_text.strip():
+        if not USE_OCR or not ocr_model:
+            print("⚠️ No digital text found and OCR is disabled.")
+            return "Handwritten PDF detected. OCR is disabled in deployed version."
+
         print("No digital text found, using OCR...")
         image_paths = convert_pdf_to_images(pdf_path)
+
         for img_path in image_paths:
             try:
                 result = ocr_model.predict(img_path)
@@ -106,22 +126,29 @@ def extract_text_from_pdf(pdf_path):
                 extracted_text += "\n"
             except Exception as e:
                 print(f"OCR error on {img_path}: {e}")
-        cleanup_images(image_paths)
+
+        cleanup_images(image_paths)  # ✅ moved inside OCR block
 
     return extracted_text.strip()
 
 
 def calculate_text_similarity(text1, text2):
     try:
-        docs = [text1, text2]
-        vectorizer = TfidfVectorizer(stop_words="english")
-        tfidf_matrix = vectorizer.fit_transform(docs)
-        similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
-        return round(similarity * 100, 2)
-    except Exception as e:
-        print("Similarity calculation error:", e)
-        return 0
+        words1 = set(re.findall(r'\w+', text1.lower()))
+        words2 = set(re.findall(r'\w+', text2.lower()))
 
+        if not words1 or not words2:
+            return 0
+
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+
+        similarity = len(intersection) / len(union)
+        return round(similarity * 100, 2)
+
+    except Exception as e:
+        print("Similarity error:", e)
+        return 0
 
 def split_into_qa_pairs(text):
     if not text.strip():
