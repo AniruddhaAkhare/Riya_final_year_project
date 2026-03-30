@@ -1,6 +1,5 @@
 flask
 flask-cors
-fitz
 google-generativeai
 python-dotenv
 flask-jwt-extended
